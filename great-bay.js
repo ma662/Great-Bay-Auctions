@@ -1,6 +1,7 @@
 // initialize dependencies
 var mysql = require("mysql");
 var inquirer = require('inquirer');
+const cTable = require('console.table');
 
 // configure connection
 var connection = mysql.createConnection({
@@ -32,7 +33,7 @@ var options = {
                     name: "option",
                     type: "list",
                     message: msg,
-                    choices: ["[ bid on an item ]", "[ post an item ]", "[ display auction items ]", "[ my bids ]", "[ my posts ]", "[ logout ]", "[ exit ]"]
+                    choices: ["[ bid on an item ]", "[ post an item ]", "[ show all auction items ]", "[ my bids ]", "[ my posts ]", "[ logout ]", "[ exit ]"]
                 }
             ])
             .then(answers => {
@@ -53,20 +54,16 @@ var options = {
 
                 switch (sel) {
                     case 'bid' : 
-                        // console.log("Bid Case Running ... ");
                         options.firstRun = false;
                         options.bidFunc();
                     break;
         
                     case 'post' :
-                    // console.log("Post Case Running ... ");
                         options.firstRun = false;
                         options.postFunc();
-                    // post logic
                     break;
 
-                    case 'display' :
-                    // console.log("Display Case Running ... ");
+                    case 'show' :
                         options.firstRun = false;
                         options.dispList(true);
                     break;
@@ -84,7 +81,6 @@ var options = {
                     break;
 
                     case 'exit' :
-                    // exit logic
                         options.quit();
                     break;
         
@@ -101,105 +97,103 @@ var options = {
     },
 
     bidFunc : function()
-    {
+    {       
         connection.query("SELECT * FROM auction_items", function(err, res) {
-            if (err) throw (err);
+        if (err) throw (err);
 
-            var choicesArr = [];
-            for (var i=0; i<res.length; i++){
-                var formatted = parseFloat(Math.round(res[i].current_bid * 100) / 100).toFixed(2);
+        options.dispList(false);
+        console.log("\n\n\n");
 
-                var myStr = ( i + 1) + ") [" + res[i].thingy_type + "] [poster: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + formatted + " (" + res[i].current_highest_bidder + ")";
+        var choicesArr = [];
+        for (var i=0; i<res.length; i++){
+            var formatted = parseFloat(Math.round(res[i].current_bid * 100) / 100).toFixed(2);
+
+            var myStr = ( i + 1 ) + ") [" + res[i].thingy_type + "] " + res[i].title + " || Highest Bid: " + formatted + " (" + res[i].current_highest_bidder + ")";
+            
+            var choicesObj = {
+                name: myStr,
                 
-                var choicesObj = {
-                    name: myStr,
-                    
-                    value: res[i].id,
-                    short: res[i].thingy_type
-                }
-                // array of choice object
-                choicesArr.push(choicesObj);
+                value: res[i].id,
+                short: res[i].thingy_type
             }
+            // array of choice object
+            choicesArr.push(choicesObj);
+        }
 
-            // choose item to bid on
-            inquirer
-            .prompt([
-                {
-                    name: "selection-id",
-                    type: "list",
-                    message: "Select an item or service to bid on: ",
-                    choices: choicesArr
-                }
-            ]).then(function(answer) 
+        // choose item to bid on
+        inquirer
+        .prompt([
             {
-                // select an item to bid on
-                var current_bid;
-                var sel_id = answer['selection-id'];
+                name: "selection-id",
+                type: "list",
+                message: "Select an item or service to bid on: ",
+                choices: choicesArr
+            }
+        ]).then(function(answer) 
+        {
+            // select an item to bid on
+            var current_bid;
+            var sel_id = answer['selection-id'];
 
-                // init another db query, retrieve logged bid
-                connection.query("SELECT * FROM auction_items WHERE ?",
-                [
+            // init another db query, retrieve logged bid
+            connection.query("SELECT * FROM auction_items WHERE ?",
+            [
+                {
+                    id: sel_id
+                }
+            ],
+                function(err, res) {
+                if (err) throw err;
+
+                console.log("\nYou've selected: " + res[0]['title']);
+                
+                current_bid = res[0]['current_bid'];
+                current_bid = parseFloat(Math.round(current_bid * 100) / 100).toFixed(2);
+
+                console.log("Current highest bid: " + current_bid);
+
+                // inquirer amount to bid 
+                inquirer
+                .prompt([
                     {
-                        id: sel_id
+                        name: "bid-attempt",
+                        type: "input",
+                        message: ("How much are you willing to bid on this item? \n"),
                     }
-                ],
-                 function(err, res) {
-                    if (err) throw err;
-
-                    console.log("\nYou've selected: " + res[0]['title']);
+                ]).then(function(answer) {
+                    var raw = answer['bid-attempt'];
                     
-                    current_bid = res[0]['current_bid'];
-                    current_bid = parseFloat(Math.round(current_bid * 100) / 100).toFixed(2);
+                    // attempt formatting to x.00 notation
+                    var formatted = parseFloat(Math.round(raw * 100) / 100).toFixed(2);
+                    if (!formatted === raw){
+                        console.log("\nRounded to: " + formatted );
+                    }
 
-                    console.log("Current highest bid: " + current_bid);
+                    if (parseFloat(formatted) > parseFloat(current_bid)) {
 
-                    // inquirer amount to bid 
-                    inquirer
-                    .prompt([
-                        {
-                            name: "bid-attempt",
-                            type: "input",
-                            message: ("How much are you willing to bid on this item? \n"),
-                        }
-                    ]).then(function(answer) {
-                        var raw = answer['bid-attempt'];
-                        
-                        // attempt formatting to x.00 notation
-                        try {
-                            var formatted = parseFloat(Math.round(raw * 100) / 100).toFixed(2);
-                            if (!formatted === raw){
-                                console.log("\nRounded to: " + formatted );
-                            }
-                        }
-                        catch (err){
-                            console.log(err);
-                        }
+                        console.log("\nYou currently have the highest bid on this item!");
+                            // connection.query('UPDATE users SET foo = ?, bar = ?, baz = ? WHERE id = ?', ['a', 'b', 'c', userId], function (error, results, fields) {
+                            // UPDATE auction_items SET current_bid=7.0, current_highest_bidder="marizu" WHERE id=4;
 
-                        if (parseFloat(formatted) > parseFloat(current_bid)) {
-
-                            console.log("\nYou currently have the highest bid on this item!");
-                                // connection.query('UPDATE users SET foo = ?, bar = ?, baz = ? WHERE id = ?', ['a', 'b', 'c', userId], function (error, results, fields) {
-                                // UPDATE auction_items SET current_bid=7.0, current_highest_bidder="marizu" WHERE id=4;
-
-                                connection.query('UPDATE auction_items SET ?, ? WHERE ?', 
-                                [ 
-                                    {current_bid : formatted}, 
-                                    {current_highest_bidder : user.username}, 
-                                    {id : sel_id} 
-                                ],
-                                function(err, res) {
-                                    if(err) throw (err);
-                                    console.log(res.affectedRows + " item updated!\n");
-                                    options.chooseOption();
-                                });
-                        }
-                        else {
-                            console.log("Your bid is either too low or invalid to be listed for this item.");
-                            options.chooseOption();
-                        }
-                    });
+                            connection.query('UPDATE auction_items SET ?, ? WHERE ?', 
+                            [ 
+                                {current_bid : formatted}, 
+                                {current_highest_bidder : user.username}, 
+                                {id : sel_id} 
+                            ],
+                            function(err, res) {
+                                if(err) throw (err);
+                                console.log(res.affectedRows + " item updated!\n");
+                                options.chooseOption();
+                            });
+                    }
+                    else {
+                        console.log("Your bid is either too low or invalid to be listed for this item.");
+                        options.chooseOption();
+                    }
                 });
             });
+        });
         });
     },
 
@@ -248,20 +242,24 @@ var options = {
                             message: ("What would you like to start the bidding at?"),
                         }
                     ]).then(function(answer) {
-                        var raw = answer['item-starting-bid'];
+                        var raw = parseFloat(answer['item-starting-bid']);
 
-                        try {
+                        // user has provided trash input
+                        if (Number.isNaN(raw)){
+                            console.log("\nThat is not a valid starting bid price.\n");
+                            options.chooseOption();
+                        }
+                        else {
                             var starting_bid = parseFloat(Math.round(raw * 100) / 100).toFixed(2);
+                            
+                            var tableObj = {
+                                'Type' : item_type,
+                                'Title' : item_name,
+                                'Starting Bid' : starting_bid
+                            };
+                            
+                            console.table('\nAddition Information', [tableObj]);
                         }
-                        catch (err) {
-                            console.log(err);
-                        }
-
-                        console.log(
-                            "\ntype or service: " + "[ " + item_type + " ]" + "\n" +
-                            "title: " + "[ " + item_name + " ]" + "\n" +
-                            "starting bid: " + "[ " + starting_bid + " ]" + "\n"
-                        );
                         
                         inquirer
                         .prompt([
@@ -279,18 +277,16 @@ var options = {
                                 try{
                                     connection.query(
                                         "INSERT INTO auction_items SET ?",
-                                        [
-                                        {
+                                        [{
                                             thingy_type: item_type,
                                             poster: user.username,
                                             title: item_name,
                                             current_bid: starting_bid,
                                             current_highest_bidder: "None"
-                                        }
-                                        ],
+                                        }],
                                         function(err, res) {
-                                        console.log("Entry successfully added!\n");
-                                        options.chooseOption();
+                                            console.log("Entry successfully added!\n");
+                                            options.chooseOption();
                                         }
                                     );
                                 }
@@ -300,38 +296,32 @@ var options = {
                                 }
                             }
                         });
-                 
                     });
-                 
-                });
-                    
-            });
-            
+                });     
+            });            
         });
     },
 
     dispList : function (rerun){
         connection.query("SELECT * FROM auction_items", function(err, res) {
             if (err) throw err;
-            
             console.log('\n');
-            console.log("[[ Great-Bay Auction List ]] ===========================================================\\\\");
 
+            var tableArr = [];
             for (var i = 0; i < res.length; i++){
-                var counter = i+1;
-                var myStr = ( counter + ") [" + res[i].thingy_type + "] [posted by: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + res[i].current_bid + " (" + res[i].current_highest_bidder + ")" );
-                console.log(myStr + " \\\\");
-                
-                // dynamic line length shenanigans
-                var eql  = "=";
-                for (var y=0; y<myStr.length; y++){
-                    eql = eql + "=";
-                }
-                console.log(eql + "˩˩");
-            }
+                var tableObj = {
+                    'Type' : res[i].thingy_type,
+                    'Poster' : res[i].poster,
+                    'Title' : res[i].title,
+                    // 'Bid Status' : res[i].status,
+                    'Highest Bid' : parseFloat(Math.round(res[i].current_bid * 100) / 100).toFixed(2),
+                    'Current Highest Bidder' : res[i].current_highest_bidder
+                };
 
-            console.log('\n\n\n');
-            console.log("( scroll up to see all. Arrow keys to see menu again )");
+                tableArr.push(tableObj);
+            }
+            console.table('Great-Bay Current Auction List', tableArr);
+            console.log("( Use arrow keys to pull up the menu )");
         });
         if (rerun){
             options.chooseOption();
@@ -350,27 +340,27 @@ var options = {
                 console.log("No bids found\n");
                 options.chooseOption();
             }
-            else {
-                console.log("\n[ Your bids ]\n");
-                
+            else {                
+                var tableArr = [];
                 for (var i = 0; i < res.length; i++) {
-                    var myStr = ( "[" + res[i].thingy_type + "] [posted by: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + res[i].current_bid + " (" + res[i].current_highest_bidder + ")" );
-                    console.log(myStr + " \\\\");
-                    
-                    // dynamic line length shenanigans
-                    var eql  = "=";
-                    for (var y=0; y<myStr.length; y++){
-                        eql = eql + "=";
-                    }
-                    console.log(eql + "˩˩");
-                }
 
-                console.log('\n\n\n');
-                console.log("( scroll up to see all. Arrow keys to see menu again )");
+                    console.log('\n');
+
+                    var tableObj = {
+                        'Type' : res[i].thingy_type,
+                        'Poster' : res[i].poster,
+                        'Title' : res[i].title,
+                        // 'Bid Status' : res[i].status,
+                        'Highest Bid' : parseFloat(Math.round(res[i].current_bid * 100) / 100).toFixed(2),
+                        'Current Highest Bidder' : res[i].current_highest_bidder + " (You)"
+                    };
+
+                    tableArr.push(tableObj);
+                }
+                console.table('Your Bids', tableArr);
                 options.chooseOption();
             }
         });
-
     },
 
     'my-posts' : function () {
@@ -385,27 +375,27 @@ var options = {
                 console.log("No posts found\n");
                 options.chooseOption();
             }
-            else {
-                console.log("\n[ Your posts ]\n");
-                
+            else {                
+                var tableArr = [];
                 for (var i = 0; i < res.length; i++) {
-                    var myStr = ( "[" + res[i].thingy_type + "] [posted by: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + res[i].current_bid + " (" + res[i].current_highest_bidder + ")" );
-                    console.log(myStr + " \\\\");
-                    
-                    // dynamic line length shenanigans
-                    var eql  = "=";
-                    for (var y=0; y<myStr.length; y++){
-                        eql = eql + "=";
-                    }
-                    console.log(eql + "˩˩");
-                }
 
-                console.log('\n\n\n');
-                console.log("( scroll up to see all. Arrow keys to see menu again )");
+                    console.log('\n');
+
+                    var tableObj = {
+                        'Type' : res[i].thingy_type,
+                        'Poster' : res[i].poster + ' (You)',
+                        'Title' : res[i].title,
+                        // 'Bid Status' : res[i].status,
+                        'Highest Bid' : parseFloat(Math.round(res[i].current_bid * 100) / 100).toFixed(2),
+                        'Current Highest Bidder' : res[i].current_highest_bidder
+                    };
+
+                    tableArr.push(tableObj);
+                }
+                console.table('Your Bids', tableArr);
                 options.chooseOption();
             }
         });
-
     },
 
     quit : function (){
