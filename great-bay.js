@@ -32,16 +32,25 @@ var options = {
                     name: "option",
                     type: "list",
                     message: msg,
-                    choices: ["[ bid on an item ]", "[ post an item ]", "[ display items ]", "[ logout ]", "[ exit ]"]
+                    choices: ["[ bid on an item ]", "[ post an item ]", "[ display auction items ]", "[ my bids ]", "[ my posts ]", "[ logout ]", "[ exit ]"]
                 }
             ])
             .then(answers => {
                 var sel = answers.option.split(' ');
 
-                if (sel != "exit") {
+                if (sel[1] === "my") {
+                    if (sel[2] === "bids"){
+                        sel = "my-bids";
+                    }
+                    else if (sel[2] === "posts"){
+                        sel = "my-posts";
+                    }
+
+                }
+                else if ( sel != "exit" ) {
                     sel = sel[1];
                 }
-        
+
                 switch (sel) {
                     case 'bid' : 
                         // console.log("Bid Case Running ... ");
@@ -60,6 +69,14 @@ var options = {
                     // console.log("Display Case Running ... ");
                         options.firstRun = false;
                         options.dispList(true);
+                    break;
+
+                    case 'my-bids':
+                        options['my-bids']();
+                    break;
+
+                    case 'my-posts':
+                        options['my-posts']();
                     break;
 
                     case "logout":
@@ -95,7 +112,6 @@ var options = {
                 var myStr = ( i + 1) + ") [" + res[i].thingy_type + "] [poster: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + formatted + " (" + res[i].current_highest_bidder + ")";
                 
                 var choicesObj = {
-                    // name: ((i+1) + " - [" + res[i].thingy_type + "] -- " + res[i].title) + " || Highest Bid: " + res[i].current_bid,
                     name: myStr,
                     
                     value: res[i].id,
@@ -321,6 +337,77 @@ var options = {
             options.chooseOption();
         }
     },
+
+    'my-bids' : function () {
+        connection.query("SELECT * FROM auction_items WHERE ?",
+        [
+            {
+                current_highest_bidder: user.username
+            }
+        ],
+        function(err, res) {
+            if (res.length === 0) {
+                console.log("No bids found\n");
+                options.chooseOption();
+            }
+            else {
+                console.log("\n[ Your bids ]\n");
+                
+                for (var i = 0; i < res.length; i++) {
+                    var myStr = ( "[" + res[i].thingy_type + "] [posted by: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + res[i].current_bid + " (" + res[i].current_highest_bidder + ")" );
+                    console.log(myStr + " \\\\");
+                    
+                    // dynamic line length shenanigans
+                    var eql  = "=";
+                    for (var y=0; y<myStr.length; y++){
+                        eql = eql + "=";
+                    }
+                    console.log(eql + "˩˩");
+                }
+
+                console.log('\n\n\n');
+                console.log("( scroll up to see all. Arrow keys to see menu again )");
+                options.chooseOption();
+            }
+        });
+
+    },
+
+    'my-posts' : function () {
+        connection.query("SELECT * FROM auction_items WHERE ?",
+        [
+            {
+                poster: user.username
+            }
+        ],
+        function(err, res) {
+            if (res.length === 0) {
+                console.log("No posts found\n");
+                options.chooseOption();
+            }
+            else {
+                console.log("\n[ Your posts ]\n");
+                
+                for (var i = 0; i < res.length; i++) {
+                    var myStr = ( "[" + res[i].thingy_type + "] [posted by: " + res[i].poster + "] -- " + res[i].title + " || Highest Bid: " + res[i].current_bid + " (" + res[i].current_highest_bidder + ")" );
+                    console.log(myStr + " \\\\");
+                    
+                    // dynamic line length shenanigans
+                    var eql  = "=";
+                    for (var y=0; y<myStr.length; y++){
+                        eql = eql + "=";
+                    }
+                    console.log(eql + "˩˩");
+                }
+
+                console.log('\n\n\n');
+                console.log("( scroll up to see all. Arrow keys to see menu again )");
+                options.chooseOption();
+            }
+        });
+
+    },
+
     quit : function (){
         console.log("Ok, Goodbye!");
         connection.end();
@@ -370,6 +457,11 @@ var user = {
                     }
                     ],
                     function(err, res) {
+                        if (res.length === 0){
+                            console.log("Login failed.\n");
+                            home();
+                        }
+
                         // console.log(res);
                         // console.log(res[0].pass);
                         if (user.username === res[0].uname && user.pass === res[0].pass){
@@ -385,7 +477,7 @@ var user = {
                     });
                 }
                 catch (err){
-                    console.log(err);
+                    throw (err);
                 }
 
             });
